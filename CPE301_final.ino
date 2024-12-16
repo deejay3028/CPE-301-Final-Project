@@ -1,3 +1,5 @@
+//CPE301 Final Project code- written by Cody Shrive and Daxton Johnson
+
 #include <Wire.h>
 #include <LiquidCrystal.h>
 #include "DHT11.h"
@@ -112,11 +114,10 @@ void loop() {
     LED_PORT &= ~((1 << YELLOW_LED) | (1 << GREEN_LED) | (1 << BLUE_LED));
     LED_PORT |= (1 << RED_LED);
     time_now = millis();
-    if(time_now - prev_time >= 1000){
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Water level low!");
-      prev_time = millis();
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Water level low!");
+    generateDelay(100);
     }
     break;
   case OFF:
@@ -124,26 +125,26 @@ void loop() {
       recordEvent("DISABLED");
     }
     stepsToMove = 0;   
+    potValue = adc_read(1);
+    //generateDelay(1);
+    targetPosition = map(potValue, 0, 1023, 0, STEPS_PER_REV - 1);
+    stepsToMove = targetPosition - currentPosition;
+    if (stepsToMove > 500 || stepsToMove < -500) {
+      // Move the stepper motor
+      myStepper.step(stepsToMove);
+      recordEvent("Stepper moved");
+      // Update the current position
+      currentPosition = targetPosition;
+    }
     MOTOR_PORT &= ~(1 << MOTOR_BIT);  // Motor off
     LED_PORT &= ~((1 << GREEN_LED) | (1 << BLUE_LED) | (1 << RED_LED));
     LED_PORT |= (1 << YELLOW_LED);
     //*port_e &= 0b00000000;
     //*port_e |= 0b00010000;
-    time_now = millis();
-    if(time_now - prev_time >= period){
-      humi = dht11.readHumidity();
-      tempC = dht11.readTemperature();
-      // put your main code here, to run repeatedly:
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Temp: ");
-      lcd.print(tempC);
-      lcd.setCursor(0, 1);
-      lcd.print("Humidity: ");
-      lcd.print(humi);
-      lcd.print("%");
-      prev_time = millis();
-    }
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("System Disabled");
+    generateDelay(100);
     break;
   case IDLE:
     if(prev_update != "IDLE"){
@@ -161,12 +162,17 @@ void loop() {
     if (stepsToMove > 500 || stepsToMove < -500) {
       // Move the stepper motor
       myStepper.step(stepsToMove);
-
+      recordEvent("Stepper moved");
       // Update the current position
       currentPosition = targetPosition;
     }
-    if(time_now - prev_time >= 5000){
-      water_level = adc_read(15);
+    water_level = adc_read(15);
+    if(water_level <= 300){
+        state = ERROR;
+        recordEvent("ERROR");
+        break;
+    }
+    if(time_now - prev_time >= period){
       humi = dht11.readHumidity();
       tempC = dht11.readTemperature();
       // put your main code here, to run repeatedly:
@@ -179,11 +185,6 @@ void loop() {
       lcd.print(humi);
       lcd.print("%");
       prev_time = millis();
-      if(water_level <= 300){
-        state = ERROR;
-        recordEvent("ERROR");
-        break;
-      }
     }
     if(tempC >= 22){
       state = ON;
@@ -203,22 +204,23 @@ void loop() {
     for(int i = 0; i < 100; i++){
       //generateDelay(400);
     }
-      long targetPosition2 = map(potValue2, 0, 1023, 0, STEPS_PER_REV - 1);
-      stepsToMove = targetPosition2 - currentPosition;
-      if (stepsToMove > 500 || stepsToMove < -500) {
-       // Move the stepper motor
-        myStepper.step(stepsToMove);
+    long targetPosition2 = map(potValue2, 0, 1023, 0, STEPS_PER_REV - 1);
+    stepsToMove = targetPosition2 - currentPosition;
+    if (stepsToMove > 500 || stepsToMove < -500) {
+      // Move the stepper motor
+      myStepper.step(stepsToMove);
+      recordEvent("Stepper moved");
 
-        // Update the current position
-        currentPosition = targetPosition2;
-      }
-    if(time_now - prev_time >= 5000){
-      water_level = adc_read(15);
-      if(water_level <= 300){
-        state = ERROR;
-        recordEvent("ERROR");
-        break;
-      }
+      // Update the current position
+      currentPosition = targetPosition2;
+    }
+    water_level = adc_read(15);
+    if(water_level <= 300){
+      state = ERROR;
+      recordEvent("ERROR");
+      break;
+    }
+    if(time_now - prev_time >= period){
       humi = dht11.readHumidity();
       tempC = dht11.readTemperature();
       // put your main code here, to run repeatedly:
@@ -349,7 +351,7 @@ void generateDelay(unsigned int freq){
   *myTCCR1B &= 0xF8;
   *myTCNT1 = (unsigned int) (65536 - ticks);
   *myTCCR1A = 0x0;
-  *myTCCR1B |= 0x0F;
+  *myTCCR1B |= 0x01;
   while((*myTIFR1 & 0x01)==0);
   *myTCCR1B &= 0xF8;
   *myTIFR1 |= 0x01;
